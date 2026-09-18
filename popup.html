@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div id="app">
+    <h1>Transcript</h1>
+    <p id="video-title" class="title"></p>
+    <p id="error" class="error hidden"></p>
+
+    <div id="controls" class="hidden">
+      <label class="field">
+        <span>Language</span>
+        <select id="lang"></select>
+      </label>
+
+      <label class="field">
+        <span>Format</span>
+        <div class="segmented" id="format">
+          <button data-fmt="txt" class="active">TXT</button>
+          <button data-fmt="md">MD</button>
+          <button data-fmt="srt">SRT</button>
+          <button data-fmt="vtt">VTT</button>
+        </div>
+      </label>
+
+      <label class="row" id="ts-row">
+        <input type="checkbox" id="timestamps">
+        <span>Include timestamps</span>
+      </label>
+
+      <button id="download" class="primary">Download transcript</button>
+      <button id="copy" class="ghost">Copy to clipboard</button>
+      <p id="status" class="status"></p>
+    </div>
+  </div>
+<script src="popup.js"></script>
+</body>
+</html>

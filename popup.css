@@ -1,0 +1,132 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  width: 300px;
+  font: 13px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: #16161d;
+  color: #e8e8ee;
+}
+
+#app { padding: 16px; }
+
+h1 {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin-bottom: 6px;
+}
+
+.title {
+  font-size: 12px;
+  color: #9a9aa8;
+  margin-bottom: 14px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.error {
+  font-size: 12px;
+  color: #f08a8a;
+  background: #2a1b1e;
+  border: 1px solid #4a2a2e;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.hidden { display: none; }
+
+.field { display: block; margin-bottom: 12px; }
+.field > span {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8a8a98;
+  margin-bottom: 6px;
+}
+
+select {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: #e8e8ee;
+  background: #22222c;
+  border: 1px solid #34343f;
+  border-radius: 8px;
+  outline: none;
+}
+
+.segmented {
+  display: flex;
+  background: #22222c;
+  border: 1px solid #34343f;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.segmented button {
+  flex: 1;
+  padding: 8px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #9a9aa8;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.segmented button.active {
+  background: #6d4fc2;
+  color: #fff;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #b9b9c6;
+  margin-bottom: 14px;
+  cursor: pointer;
+}
+
+.row input { accent-color: #6d4fc2; }
+
+button.primary {
+  width: 100%;
+  padding: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: #6d4fc2;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+button.primary:hover { background: #7d5fd0; }
+button.primary:disabled { opacity: 0.5; cursor: default; }
+
+button.ghost {
+  width: 100%;
+  padding: 9px;
+  font-size: 12px;
+  color: #b9b9c6;
+  background: transparent;
+  border: 1px solid #34343f;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+button.ghost:hover { border-color: #6d4fc2; color: #e8e8ee; }
+
+.status {
+  font-size: 11px;
+  color: #8a8a98;
+  margin-top: 10px;
+  min-height: 16px;
+  text-align: center;
+}
