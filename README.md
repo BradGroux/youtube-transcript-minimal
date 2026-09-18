@@ -43,6 +43,35 @@ The extension isn't on the Chrome Web Store (deliberately — see
 
 Full walkthrough: [docs/INSTALL.md](docs/INSTALL.md).
 
+## Automatic updates
+
+Chrome never auto-updates an unpacked extension, but this repo ships both
+halves of the next best thing:
+
+1. **Scheduled pull (macOS).** A LaunchAgent runs `git pull` in your repo
+   clone every 15 minutes:
+   ```bash
+   # 1. Edit the repo path inside the plist first:
+   #    scripts/com.minimal-transcript.gitpull.plist
+   cp scripts/com.minimal-transcript.gitpull.plist ~/Library/LaunchAgents/
+   launchctl load ~/Library/LaunchAgents/com.minimal-transcript.gitpull.plist
+   ```
+2. **Self-reload.** The extension's background worker checks the repo's
+   published `manifest.json` on browser startup and every 30 minutes. When
+   the published version is newer than what's installed, it reloads itself
+   so the pulled code takes effect.
+
+This only works with a `git clone` install — a downloaded ZIP can't pull.
+And one honest caveat: after installing *this* update, reload the extension
+once in `chrome://extensions` (or restart Chrome). That's the last manual
+reload; from then on the updater is running and handles the rest. Note that
+already-open YouTube tabs keep the old helper until the tab is reloaded —
+new code applies to pages loaded after the update.
+
+Privacy note: the updater's only network call is fetching this repo's public
+`manifest.json` from `raw.githubusercontent.com`. No user data, cookies, or
+identifiers are sent. Details in [Privacy](docs/PRIVACY.md).
+
 ## Use
 
 1. Pick a language (manual captions are preferred over auto-generated when

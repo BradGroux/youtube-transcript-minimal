@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Minimal Transcript — scheduled repo pull (macOS).
+  Runs `git pull` in the extension's repo every 15 minutes so the
+  extension's self-updater (background.js) finds new code on disk
+  and reloads itself.
+
+  Setup:
+    1. Replace /REPLACE/WITH/PATH/TO/youtube-transcript-minimal below with
+       the real path where you cloned this repo on your Mac.
+    2. cp scripts/com.minimal-transcript.gitpull.plist ~/Library/LaunchAgents/
+    3. launchctl load ~/Library/LaunchAgents/com.minimal-transcript.gitpull.plist
+
+  Logs: /tmp/minimal-transcript-pull.log
+  Unload: launchctl unload ~/Library/LaunchAgents/com.minimal-transcript.gitpull.plist
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.minimal-transcript.gitpull</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/git</string>
+    <string>-C</string>
+    <string>/REPLACE/WITH/PATH/TO/youtube-transcript-minimal</string>
+    <string>pull</string>
+    <string>--ff-only</string>
+    <string>--quiet</string>
+  </array>
+  <key>StartInterval</key>
+  <integer>900</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/tmp/minimal-transcript-pull.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/minimal-transcript-pull.log</string>
+</dict>
+</plist>

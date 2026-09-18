@@ -18,10 +18,12 @@ extension touches and what it doesn't.
 - No analytics, telemetry, or crash reporting. There is no code that measures
   anything about you.
 - No accounts, no sign-ups, no identifiers created or stored.
-- No third-party servers. The only hosts ever contacted are `*.youtube.com`.
-  (You can verify: there is no `fetch`/`XMLHttpRequest`/websocket call to any
-  other host in the source.)
-- No background service worker — nothing runs when the popup is closed.
+- No third-party servers. The only hosts ever contacted are `*.youtube.com`
+  and `raw.githubusercontent.com` — the latter solely to fetch this repo's
+  public `manifest.json` for the version check behind automatic updates.
+  That request carries no user data, cookies, or identifiers (it's a plain
+  fetch of a public file). (You can verify: search for `https://` in the
+  source — every request target is a YouTube host or that one manifest URL.)
 - No storage: no `chrome.storage`, no cookies set, no localStorage writes.
 - No ad injection, no DOM modification of the YouTube page beyond reading it.
 
@@ -31,7 +33,9 @@ extension touches and what it doesn't.
 |---|---|
 | `activeTab` | Reading the current tab's URL/title when you click the icon. |
 | `scripting` | Injecting the content script if the extension was installed while a YouTube tab was already open. |
+| `alarms` | Waking the self-updater to check for a new published version (browser startup + every 30 minutes). |
 | `*://*.youtube.com/*` | Reading the video page's player data and fetching captions. Same-origin only. |
+| `https://raw.githubusercontent.com/*` | Fetching this repo's public `manifest.json` for the version check behind automatic updates. No user data is sent. |
 
 ## Session values in flight
 
@@ -42,6 +46,7 @@ nowhere else, are never logged, and are never persisted.
 
 ## Verifying this yourself
 
-The source is four small files with no dependencies and no build step. Search
-for `https://` in `content.js` and `popup.js` — every request target is a
-YouTube host. That's the whole audit.
+The source is five small files with no dependencies and no build step. Search
+for `https://` across them — every request target is a YouTube host, plus the
+single public `manifest.json` URL in `background.js` used for update checks.
+That's the whole audit.

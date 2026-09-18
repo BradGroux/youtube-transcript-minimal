@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-18
+
+### Added
+
+- Self-updating installs: a tiny background worker (`background.js`) checks
+  this repo's published `manifest.json` on browser startup and every 30
+  minutes, and reloads the extension when a newer version is available. Pair
+  it with the new macOS LaunchAgent
+  (`scripts/com.minimal-transcript.gitpull.plist`), which `git pull`s the
+  repo every 15 minutes, and unpacked installs stay current with no manual
+  reloads. The only network call the worker makes is fetching the repo's own
+  public `manifest.json` — no user data, no identifiers, no telemetry. See
+  [Automatic updates](README.md#automatic-updates).
+
 ## [1.2.1] - 2026-09-18
 
 ### Fixed
