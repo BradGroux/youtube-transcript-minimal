@@ -5,8 +5,47 @@ const $ = (id) => document.getElementById(id);
 
 let tracks = [];
 let videoTitle = 'transcript';
-let format = 'txt';
+let format = 'md';
 let tabId = null;
+
+// Preferences: remembered across popup opens via chrome.storage.local.
+// Defaults are Markdown with timestamps — change them in the popup and
+// your choice sticks.
+const PREFS_KEY = 'minimal-transcript-prefs';
+const DEFAULT_PREFS = { format: 'md', timestamps: true };
+const FORMATS = ['txt', 'md', 'srt', 'vtt'];
+
+async function loadPrefs() {
+  try {
+    const stored = await chrome.storage.local.get(PREFS_KEY);
+    const p = (stored && stored[PREFS_KEY]) || {};
+    return {
+      format: FORMATS.includes(p.format) ? p.format : DEFAULT_PREFS.format,
+      timestamps: typeof p.timestamps === 'boolean' ? p.timestamps : DEFAULT_PREFS.timestamps,
+    };
+  } catch {
+    return { ...DEFAULT_PREFS };
+  }
+}
+
+function savePrefs() {
+  try {
+    chrome.storage.local.set({
+      [PREFS_KEY]: { format, timestamps: $('timestamps').checked },
+    });
+  } catch {
+    // Storage unavailable — preferences just won't persist this session.
+  }
+}
+
+function applyPrefs(prefs) {
+  format = prefs.format;
+  document
+    .querySelectorAll('#format button')
+    .forEach((x) => x.classList.toggle('active', x.dataset.fmt === format));
+  $('timestamps').checked = prefs.timestamps;
+  $('ts-row').style.display = format === 'txt' || format === 'md' ? '' : 'none';
+}
 
 function extractVideoId(url) {
   try {
@@ -159,6 +198,8 @@ async function withBusy(fn) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  applyPrefs(await loadPrefs());
+
   // Format segmented control.
   $('format').addEventListener('click', (e) => {
     const b = e.target.closest('button');
@@ -166,7 +207,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     format = b.dataset.fmt;
     document.querySelectorAll('#format button').forEach((x) => x.classList.toggle('active', x === b));
     $('ts-row').style.display = (format === 'txt' || format === 'md') ? '' : 'none';
+    savePrefs();
   });
+
+  $('timestamps').addEventListener('change', savePrefs);
 
   $('download').addEventListener('click', () =>
     withBusy(async () => {

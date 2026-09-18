@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-18
+
+### Fixed
+
+- Transcript-panel fallback now scores every engagement panel on the page
+  instead of stopping at the classic transcript panel. On videos where
+  YouTube gates caption data, the classic panel can open empty while the
+  newer *"In this video"* panel holds the transcript — the scraper finds it
+  now. Panel traversal also pierces open shadow roots, and the error message
+  tells you to open YouTube's *"In this video"* Transcript tab and retry when
+  the classic panel stays empty.
+
+### Added
+
+- The popup remembers your format and timestamp toggle between opens
+  (`chrome.storage.local`, new `storage` permission — preferences only,
+  nothing leaves your device). Defaults are now **Markdown with timestamps**.
+
 ## [1.3.0] - 2026-09-18
 
 ### Added

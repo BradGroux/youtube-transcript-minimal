@@ -163,12 +163,22 @@
   // Last-resort path: drive YouTube's own "Show transcript" UI and scrape
   // the rendered panel. This rides YouTube's real request path — including
   // whatever attestation its player code attaches — so it works whenever
+  // Last-resort path: drive YouTube's own "Show transcript" UI and scrape
+  // the rendered panel. This rides YouTube's real request path — including
+  // whatever attestation its player code attaches — so it works whenever
   // the panel itself works. The description is expanded and collapsed
   // again afterwards (best effort).
+  //
+  // YouTube can show transcript content in more than one engagement panel
+  // (the classic transcript panel and the newer "In this video" panel), and
+  // the classic one may open empty on videos where YouTube gates caption
+  // data. So every candidate panel is scored and the first one that yields
+  // cues wins — an empty classic panel can never shadow a content-bearing
+  // one. Traversal pierces open shadow roots, which YouTube uses heavily.
   async function fetchTranscriptViaPanel() {
-    // Fast path: the panel is already open (e.g. opened manually) — scrape it.
-    let cues = extractPanelCues();
-    if (!cues.length) {
+    // Fast path: a panel is already open (e.g. opened manually) — scrape it.
+    let found = extractPanelCuesFromBest();
+    if (!found.cues.length) {
       let showBtn = findShowTranscriptButton();
       if (!showBtn) {
         const more = findExpandDescriptionButton();
@@ -182,10 +192,19 @@
       if (!showBtn) throw new Error('No transcript panel found for this video.');
       try { showBtn.scrollIntoView({ block: 'center' }); } catch { /* noop */ }
       showBtn.click();
-      cues = await waitFor(extractPanelCues, 20000);
-      if (!cues.length) throw new Error('The transcript panel did not load.');
+      const deadline = Date.now() + 20000;
+      while (!found.cues.length && Date.now() < deadline) {
+        await sleep(300);
+        found = extractPanelCuesFromBest();
+      }
+      if (!found.cues.length) {
+        throw new Error(
+          "The transcript panel opened but stayed empty. If YouTube shows an " +
+            "'In this video' panel with a Transcript tab, open it and try again."
+        );
+      }
     }
-    cues = await loadAllPanelCues(cues);
+    const cues = await loadAllPanelCues(found);
     try {
       closeTranscriptPanel();
     } catch { /* best effort */ }
@@ -193,48 +212,131 @@
     return cues;
   }
 
-  function extractPanelCues() {
-    const panel = findTranscriptPanel();
-    return panel ? extractCuesFromPanel(panel) : [];
+  // Every element under root, including inside open shadow roots.
+  function deepElements(root) {
+    const out = [];
+    const walk = (node) => {
+      if (!node || node.nodeType !== 1) return;
+      out.push(node);
+      const kids = node.children;
+      for (let i = 0; i < kids.length; i++) walk(kids[i]);
+      if (node.shadowRoot) {
+        const skids = node.shadowRoot.children;
+        for (let i = 0; i < skids.length; i++) walk(skids[i]);
+      }
+    };
+    walk(root);
+    return out;
   }
 
-  function findTranscriptPanel() {
-    const byTarget = document.querySelector(
-      'ytd-engagement-panel-section-list-renderer[target-id*="transcript" i]'
-    );
-    if (byTarget) return byTarget;
-    // Fallback: locate via the "Search transcript" input, then walk up to
-    // the smallest ancestor holding several timestamp pills.
-    const input = Array.from(document.querySelectorAll('input')).find((i) =>
-      /transcript/i.test(i.getAttribute('placeholder') || '')
-    );
-    if (!input) return null;
-    let el = input.parentElement;
-    let fallback = null;
-    for (let d = 0; d < 12 && el && el !== document.body; d++) {
-      if (countTimestampPills(el) >= 2) return el;
-      if (!fallback && /panel/i.test(el.tagName || '')) fallback = el;
-      el = el.parentElement;
+  // Text content including text inside open shadow roots, in DOM order.
+  function deepText(root) {
+    let s = '';
+    for (const el of deepElements(root)) {
+      const nodes = el.childNodes;
+      for (let i = 0; i < nodes.length; i++) {
+        if (nodes[i].nodeType === 3) s += nodes[i].textContent + ' ';
+      }
     }
-    return fallback;
+    return s.replace(/\s+/g, ' ').trim();
+  }
+
+  // Parent chain that crosses shadow boundaries (element -> shadow host).
+  function deepParent(el) {
+    if (!el) return null;
+    if (el.parentElement) return el.parentElement;
+    const root = typeof el.getRootNode === 'function' ? el.getRootNode() : null;
+    if (root && root.host) return root.host;
+    return null;
+  }
+
+  // Visibility proxy for ranking (not filtering): a zero-area rect means
+  // the element or an ancestor is display:none — typical of hidden panels.
+  function isVisibleish(el) {
+    try {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  // All candidate transcript panels, best first: visible panels holding
+  // timestamp pills outrank hidden or empty ones.
+  function findTranscriptPanels() {
+    const candidates = [];
+    const seen = new Set();
+    const add = (el) => {
+      if (el && !seen.has(el)) {
+        seen.add(el);
+        candidates.push(el);
+      }
+    };
+    for (const el of document.querySelectorAll('ytd-engagement-panel-section-list-renderer')) {
+      add(el);
+    }
+    // Fallback: walk up from any "transcript" search input to the smallest
+    // ancestor holding several timestamp pills. This covers panels whose
+    // target-id doesn't mention transcripts (e.g. the "In this video" panel).
+    const inputs = Array.from(document.querySelectorAll('input'));
+    for (const panel of candidates.slice()) {
+      for (const el of deepElements(panel)) {
+        if ((el.tagName || '').toUpperCase() === 'INPUT') inputs.push(el);
+      }
+    }
+    for (const input of inputs) {
+      if (!/transcript/i.test(input.getAttribute('placeholder') || '')) continue;
+      let el = deepParent(input);
+      for (let d = 0; d < 16 && el && el !== document.body && el !== document.documentElement; d++) {
+        if (countTimestampPills(el) >= 2) {
+          add(el);
+          break;
+        }
+        el = deepParent(el);
+      }
+    }
+    candidates.sort((a, b) => {
+      const va = isVisibleish(a) ? 1 : 0;
+      const vb = isVisibleish(b) ? 1 : 0;
+      if (va !== vb) return vb - va;
+      return countTimestampPills(b) - countTimestampPills(a);
+    });
+    return candidates;
+  }
+
+  // The best candidate panel and its cues (first candidate that yields any).
+  function extractPanelCuesFromBest() {
+    for (const panel of findTranscriptPanels()) {
+      const cues = extractCuesFromPanel(panel);
+      if (cues.length) return { panel, cues };
+    }
+    return { panel: null, cues: [] };
+  }
+
+  function extractPanelCues() {
+    return extractPanelCuesFromBest().cues;
   }
 
   const TS_RE = /^\d{1,3}:\d{2}(?::\d{2})?$/;
 
   function countTimestampPills(root) {
     let n = 0;
-    const els = root.querySelectorAll('*');
-    for (const el of els) {
+    for (const el of deepElements(root)) {
       if (el.children.length > 1) continue;
-      if (TS_RE.test((el.textContent || '').trim())) n++;
-      if (n >= 2) return n;
+      if (TS_RE.test((el.textContent || '').trim())) {
+        n++;
+        if (n >= 2) return n;
+      }
     }
     return n;
   }
 
   function extractCuesFromPanel(panel) {
+    const els = deepElements(panel);
     // Strategy 1: classic segment renderers.
-    const renderers = Array.from(panel.querySelectorAll('ytd-transcript-segment-renderer'));
+    const renderers = els.filter((el) =>
+      /^ytd-transcript-segment-renderer$/i.test(el.tagName || '')
+    );
     if (renderers.length) {
       const cues = [];
       for (const el of renderers) {
@@ -251,11 +353,10 @@
       if (cues.length) return finalizeCues(cues);
     }
     // Strategy 2: timestamp pills (redesigned "In this video" panel).
-    return cuesFromTimestampPills(panel);
+    return cuesFromTimestampPills(els);
   }
 
-  function cuesFromTimestampPills(panel) {
-    const els = Array.from(panel.querySelectorAll('*'));
+  function cuesFromTimestampPills(els) {
     const cues = [];
     const seen = new Set();
     for (const el of els) {
@@ -264,30 +365,26 @@
       if (!TS_RE.test(t)) continue;
       const start = parseTsText(t);
       if (start == null) continue;
-      // Walk up to the segment container: the nearest ancestor whose text
-      // is substantially longer than the timestamp itself.
-      let node = el.parentElement;
+      // Walk up to the segment container: the nearest ancestor whose deep
+      // text (shadow roots included) is substantially longer than the
+      // timestamp itself.
+      let node = deepParent(el);
       let container = null;
-      while (node && node !== panel && node !== document.body) {
-        const txt = (node.textContent || '').replace(/\s+/g, ' ').trim();
-        if (txt.length > t.length + 15) {
+      for (let d = 0; d < 8 && node && node.nodeType === 1; d++) {
+        if (deepText(node).length > t.length + 15) {
           container = node;
           break;
         }
-        node = node.parentElement;
+        node = deepParent(node);
       }
       if (!container || seen.has(container)) continue;
       seen.add(container);
-      const clone = container.cloneNode(true);
-      const pillInClone = Array.from(clone.querySelectorAll('*')).find(
-        (n) => n.children.length <= 1 && (n.textContent || '').trim() === t
-      );
-      if (pillInClone) pillInClone.remove();
-      const text = (clone.textContent || '')
-        .replace(/\s+/g, ' ')
-        .replace(TS_RE, '')
-        .trim();
-      if (!text) continue;
+      // The pill is the first timestamp-like token in DOM order; strip just it.
+      let text = deepText(container);
+      const idx = text.indexOf(t);
+      if (idx >= 0) text = text.slice(0, idx) + ' ' + text.slice(idx + t.length);
+      text = text.replace(/\s+/g, ' ').trim();
+      if (!text || TS_RE.test(text)) continue;
       cues.push({ start, dur: 0, text });
     }
     return finalizeCues(cues);
@@ -311,19 +408,24 @@
   }
 
   // The segment list can be virtualized; scroll it to load the rest.
-  async function loadAllPanelCues(initial) {
-    let cues = initial;
-    const panel = findTranscriptPanel();
-    if (!panel) return cues;
+  async function loadAllPanelCues(found) {
+    let cues = found.cues;
+    let panel = found.panel;
+    if (!panel) {
+      const f = extractPanelCuesFromBest();
+      panel = f.panel;
+      if (!panel) return cues;
+    }
     const scroller = findPanelScroller(panel);
     if (!scroller) return cues;
     let stable = 0;
     for (let i = 0; i < 8 && stable < 2; i++) {
       scroller.scrollTop = scroller.scrollHeight;
       await sleep(600);
-      const now = extractCuesFromPanel(findTranscriptPanel() || panel);
-      if (now.length > cues.length) {
-        cues = now;
+      const now = extractPanelCuesFromBest();
+      if (now.cues.length > cues.length) {
+        cues = now.cues;
+        if (now.panel) panel = now.panel;
         stable = 0;
       } else {
         stable++;
@@ -336,7 +438,7 @@
   }
 
   function findPanelScroller(panel) {
-    const candidates = Array.from(panel.querySelectorAll('*')).filter((el) => {
+    const candidates = deepElements(panel).filter((el) => {
       try {
         return el.scrollHeight > el.clientHeight + 50 && el.clientHeight > 100;
       } catch {
@@ -390,22 +492,6 @@
     let s = 0;
     for (const p of parts) s = s * 60 + p;
     return s;
-  }
-
-  function waitFor(fn, timeoutMs) {
-    return new Promise((resolve) => {
-      const start = Date.now();
-      const tick = () => {
-        let val = null;
-        try {
-          val = fn();
-        } catch { /* retry */ }
-        if (val && val.length) return resolve(val);
-        if (Date.now() - start > timeoutMs) return resolve([]);
-        setTimeout(tick, 300);
-      };
-      tick();
-    });
   }
 
   function sleep(ms) {

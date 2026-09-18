@@ -24,7 +24,9 @@ extension touches and what it doesn't.
   That request carries no user data, cookies, or identifiers (it's a plain
   fetch of a public file). (You can verify: search for `https://` in the
   source — every request target is a YouTube host or that one manifest URL.)
-- No storage: no `chrome.storage`, no cookies set, no localStorage writes.
+- Local preferences only: the popup remembers your chosen format and
+  timestamp toggle in `chrome.storage.local`. Nothing else is stored, nothing
+  leaves your device.
 - No ad injection, no DOM modification of the YouTube page beyond reading it.
 
 ## Permissions, justified
@@ -34,6 +36,7 @@ extension touches and what it doesn't.
 | `activeTab` | Reading the current tab's URL/title when you click the icon. |
 | `scripting` | Injecting the content script if the extension was installed while a YouTube tab was already open. |
 | `alarms` | Waking the self-updater to check for a new published version (browser startup + every 30 minutes). |
+| `storage` | Remembering your format and timestamp preferences on your device. Nothing else is stored. |
 | `*://*.youtube.com/*` | Reading the video page's player data and fetching captions. Same-origin only. |
 | `https://raw.githubusercontent.com/*` | Fetching this repo's public `manifest.json` for the version check behind automatic updates. No user data is sent. |
 
