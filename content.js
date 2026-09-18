@@ -65,17 +65,27 @@
   // Primary path: fetch the track's timedtext URL (legacy XML).
   // Falls back to the transcript API YouTube's own UI uses when YouTube
   // answers the timedtext request with an empty body (happens on some
-  // videos, especially auto-generated captions).
+  // videos, especially auto-generated captions). As a last resort, drives
+  // YouTube's own "Show transcript" UI and scrapes the rendered panel —
+  // that rides YouTube's real request path, so it works whenever the panel
+  // itself works. The description is expanded and collapsed again.
   async function getTranscript(baseUrl) {
     try {
       const xml = await fetchTranscript(baseUrl);
       return { xml };
     } catch {
-      /* fall through to the API fallback below */
+      /* fall through to the fallbacks below */
     }
     const res = await fetch(location.href, { credentials: 'include' });
     if (!res.ok) throw new Error('Could not load the video page.');
-    const cues = await fetchTranscriptViaApi(await res.text());
+    const html = await res.text();
+    try {
+      const cues = await fetchTranscriptViaApi(html);
+      return { cues };
+    } catch {
+      /* fall through to the panel fallback below */
+    }
+    const cues = await fetchTranscriptViaPanel();
     return { cues };
   }
 
@@ -90,7 +100,7 @@
   // Same endpoint + params the "Show transcript" button in the video
   // description uses. Same-origin, uses the user's normal YouTube session.
   async function fetchTranscriptViaApi(html) {
-    const { apiKey, visitorData, clientVersion, params } = extractInnertube(html);
+    const { apiKey, visitorData, clientVersion, idToken, params } = extractInnertube(html);
     if (!apiKey || !params) {
       throw new Error('YouTube did not return captions for this video.');
     }
@@ -106,6 +116,9 @@
       context.client.visitorData = visitorData;
       headers['X-Goog-Visitor-Id'] = visitorData;
     }
+    // Logged-in sessions: the web client sends its identity token on
+    // youtubei requests; without it the endpoint can reject the call.
+    if (idToken) headers['X-Youtube-Identity-Token'] = idToken;
     const cues = [];
     let payload = { context, params };
     for (let page = 0; page < 20; page++) {
@@ -147,9 +160,116 @@
     return cues;
   }
 
+  // Last-resort path: drive YouTube's own "Show transcript" UI and scrape
+  // the rendered panel. This rides YouTube's real request path — including
+  // whatever attestation its player code attaches — so it works whenever
+  // the panel itself works. The description is expanded and collapsed
+  // again afterwards (best effort).
+  async function fetchTranscriptViaPanel() {
+    let showBtn = findShowTranscriptButton();
+    if (!showBtn) {
+      const more = findExpandDescriptionButton();
+      if (more) {
+        try { more.scrollIntoView({ block: 'center' }); } catch { /* noop */ }
+        more.click();
+        await sleep(1500);
+      }
+      showBtn = findShowTranscriptButton();
+    }
+    if (!showBtn) throw new Error('No transcript panel found for this video.');
+    try { showBtn.scrollIntoView({ block: 'center' }); } catch { /* noop */ }
+    showBtn.click();
+    const segments = await waitFor(
+      () =>
+        Array.from(document.querySelectorAll('ytd-transcript-segment-renderer')).filter(
+          (el) => el.getBoundingClientRect().height > 0
+        ),
+      15000
+    );
+    if (!segments.length) throw new Error('The transcript panel did not load.');
+    const cues = [];
+    for (const el of segments) {
+      const tsEl = el.querySelector('.segment-timestamp');
+      const start = parseTsText(tsEl ? tsEl.textContent : '');
+      if (start == null) continue;
+      const clone = el.cloneNode(true);
+      const cTs = clone.querySelector('.segment-timestamp');
+      if (cTs) cTs.remove();
+      const text = (clone.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!text) continue;
+      cues.push({ start, dur: 0, text });
+    }
+    for (let i = 0; i < cues.length; i++) {
+      cues[i].dur =
+        i + 1 < cues.length ? Math.max(0, cues[i + 1].start - cues[i].start) : 3;
+    }
+    try {
+      closeTranscriptPanel();
+    } catch { /* best effort */ }
+    if (!cues.length) throw new Error('The transcript panel was empty.');
+    return cues;
+  }
+
+  function findShowTranscriptButton() {
+    const btns = Array.from(document.querySelectorAll('button'));
+    const isMatch = (b) => (b.textContent || '').trim().toLowerCase() === 'show transcript';
+    return btns.find((b) => isMatch(b) && b.offsetParent !== null) || btns.find(isMatch) || null;
+  }
+
+  function findExpandDescriptionButton() {
+    const expander = document.querySelector('ytd-text-inline-expander');
+    const byId = expander && expander.querySelector('#expand');
+    if (byId) return byId;
+    return (
+      Array.from(document.querySelectorAll('tp-yt-paper-button, button')).find((b) =>
+        /^\s*(\.\.\.|\u2026)?\s*more\s*$/i.test(b.textContent || '')
+      ) || null
+    );
+  }
+
+  function closeTranscriptPanel() {
+    const closeBtn = document.querySelector(
+      '[aria-label="Close transcript"], ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-searchable-transcript"] [aria-label="Close"]'
+    );
+    if (closeBtn) closeBtn.click();
+    const less = Array.from(document.querySelectorAll('tp-yt-paper-button, button')).find(
+      (b) => /^\s*show less\s*$/i.test(b.textContent || '') && b.offsetParent !== null
+    );
+    if (less) less.click();
+  }
+
+  function parseTsText(t) {
+    const parts = (t || '').trim().split(':').map((p) => parseInt(p, 10));
+    if (!parts.length || parts.some((n) => Number.isNaN(n))) return null;
+    let s = 0;
+    for (const p of parts) s = s * 60 + p;
+    return s;
+  }
+
+  function waitFor(fn, timeoutMs) {
+    return new Promise((resolve) => {
+      const start = Date.now();
+      const tick = () => {
+        let val = null;
+        try {
+          val = fn();
+        } catch { /* retry */ }
+        if (val && val.length) return resolve(val);
+        if (Date.now() - start > timeoutMs) return resolve([]);
+        setTimeout(tick, 300);
+      };
+      tick();
+    });
+  }
+
+  function sleep(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+
   function extractInnertube(html) {
     const apiKey = (html.match(/"INNERTUBE_API_KEY":"([^"]+)"/) || [])[1] || '';
     const visitorData = (html.match(/"visitorData":"([^"]+)"/) || [])[1] || '';
+    const idToken = (html.match(/"ID_TOKEN":"([^"]+)"/) || [])[1] || '';
     let clientVersion = '2.20240101.00.00';
     const ctxIdx = html.indexOf('"INNERTUBE_CONTEXT"');
     if (ctxIdx >= 0) {
@@ -168,7 +288,7 @@
         }
       }
     }
-    return { apiKey, visitorData, clientVersion, params };
+    return { apiKey, visitorData, clientVersion, idToken, params };
   }
 
   function collectNodes(obj, key, out) {

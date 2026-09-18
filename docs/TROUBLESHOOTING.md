@@ -23,9 +23,10 @@ download — this is YouTube's data, not an extension bug.
 
 ## "YouTube didn't return any captions for this video…"
 
-The video *lists* caption tracks, but YouTube blocked both download paths
-(the classic caption endpoint returned an empty body, and the transcript API
-fallback came back empty too). This happens on some videos — usually
+The video *lists* caption tracks, but YouTube blocked all three download paths
+(the classic caption endpoint returned an empty body, the transcript API
+fallback was rejected, and driving YouTube's own transcript panel didn't
+produce segments either). This happens on some videos — usually
 auto-generated captions that YouTube gates. What to try:
 
 1. Open the video description → **…more** → **Show transcript**. If YouTube's
@@ -35,6 +36,13 @@ auto-generated captions that YouTube gates. What to try:
 
 If YouTube's panel works but the extension consistently fails on the same
 video, [open an issue](../../issues) with the video URL.
+
+## The page visibly expands the description during a download
+
+That's the last-resort fallback: YouTube rejected both invisible download
+paths, so the extension briefly drives YouTube's own *Show transcript* UI to
+get the captions, then collapses the description again. It only happens on
+videos where YouTube gates the direct endpoints.
 
 ## "Transcript came back empty."
 

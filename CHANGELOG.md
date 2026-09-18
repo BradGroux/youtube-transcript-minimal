@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-18
+
+### Added
+
+- Transcript-panel fallback: if both the timedtext endpoint and the
+  `get_transcript` API refuse the request (YouTube now rejects hand-rolled
+  API calls on some videos with a `400`), the extension drives YouTube's own
+  *\"Show transcript\"* UI and scrapes the rendered panel. That rides
+  YouTube's real request path, so it works whenever the panel itself works.
+  The description is expanded and collapsed again afterwards.
+- The `get_transcript` API fallback now sends YouTube's identity token
+  (`X-Youtube-Identity-Token`) on logged-in sessions, matching what the web
+  client sends.
+
+### Fixed
+
+- `400` failure on videos where YouTube gates caption endpoints (e.g. some
+  auto-generated-caption videos): the extension no longer gives up after the
+  API fallback and instead falls through to the transcript panel.
+
 ## [1.1.0] - 2026-09-18
 
 ### Added

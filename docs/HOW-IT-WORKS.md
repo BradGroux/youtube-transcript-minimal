@@ -92,7 +92,23 @@ nothing is hardcoded:
 The response contains `transcriptSegmentRenderer` nodes
 (`startMs`, `endMs`, `snippet.runs[].text`). The fallback follows
 `transcriptSegmentListRenderer.continuations` so long videos come back whole,
-and returns structured cues to the popup — no XML involved.
+and returns structured cues to the popup — no XML involved. On logged-in
+sessions it also sends `X-Youtube-Identity-Token` (from the page's `ID_TOKEN`),
+matching what YouTube's web client sends.
+
+### Path 3 — transcript-panel fallback
+
+YouTube has started rejecting hand-rolled `get_transcript` calls on some
+videos with `400` — the endpoint wants attestation data that only YouTube's
+own player JavaScript generates, and this extension deliberately does not run
+that code. When Path 2 fails, the content script drives YouTube's own *"Show
+transcript"* UI instead: it expands the description (`...more`), clicks *Show
+transcript*, waits for `ytd-transcript-segment-renderer` nodes to render,
+scrapes each segment's `.segment-timestamp` and text, then closes the panel
+and collapses the description again (best effort). Segment durations are
+derived from consecutive start times. This rides YouTube's real request path,
+so it works whenever the panel itself works — at the cost of briefly
+expanding the description, which is why it's the last resort, not the first.
 
 ## Formatting
 
@@ -114,11 +130,12 @@ YouTube changes its markup and endpoints regularly. Known sensitivities:
 
 - If `ytInitialPlayerResponse` moves or is renamed, caption discovery fails
   with "No player data found on this page."
-- If YouTube starts requiring attestation data on `get_transcript` (there
-  are already experiment flags for it), the fallback may stop working on some
-  sessions — the popup will say so plainly.
+- YouTube's `get_transcript` endpoint now requires attestation data on some
+  videos/sessions (confirmed: hand-rolled calls get `400` while the real panel
+  works). Path 3 exists for exactly this case — it rides the real UI instead
+  of re-implementing the request.
 - The extension deliberately does **not** run YouTube's botguard/attestation
   JavaScript. Keeping it that way is a design decision, not an oversight.
 
-When both paths fail, the popup shows a plain-language error pointing at
+When all three paths fail, the popup shows a plain-language error pointing at
 YouTube's own transcript panel (video description → *Show transcript*).
