@@ -51,7 +51,7 @@ legacy caption XML:
 
 ```xml
 <transcript>
-  <text start="0" dur="2.5">Jev is here and it&#39;s a big deal.</text>
+  <text start="0" dur="2.5">Welcome back to the channel.</text>
   ...
 </transcript>
 ```
@@ -103,12 +103,18 @@ videos with `400` — the endpoint wants attestation data that only YouTube's
 own player JavaScript generates, and this extension deliberately does not run
 that code. When Path 2 fails, the content script drives YouTube's own *"Show
 transcript"* UI instead: it expands the description (`...more`), clicks *Show
-transcript*, waits for `ytd-transcript-segment-renderer` nodes to render,
-scrapes each segment's `.segment-timestamp` and text, then closes the panel
-and collapses the description again (best effort). Segment durations are
-derived from consecutive start times. This rides YouTube's real request path,
-so it works whenever the panel itself works — at the cost of briefly
-expanding the description, which is why it's the last resort, not the first.
+transcript*, waits for the panel's segments to render, scrapes them, then
+closes the panel and collapses the description again (best effort). Scraping
+is selector-resilient: it first tries the classic
+`ytd-transcript-segment-renderer` elements, then falls back to detecting
+timestamp pills (`0:00`-style elements) in YouTube's redesigned *"In this
+video"* panel, walking up to each pill's segment container for the text. If
+the segment list is virtualized, it scrolls the panel to load the rest, and
+if the panel is already open it scrapes it directly without clicking
+anything. Segment durations are derived from consecutive start times. This
+rides YouTube's real request path, so it works whenever the panel itself
+works — at the cost of briefly expanding the description, which is why it's
+the last resort, not the first.
 
 ## Formatting
 

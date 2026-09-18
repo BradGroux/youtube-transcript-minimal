@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-09-18
+
+### Fixed
+
+- Transcript-panel fallback now recognizes YouTube's redesigned transcript
+  panel (the *"In this video"* view with chapter headers), which no longer
+  uses the classic `ytd-transcript-segment-renderer` elements. The scraper
+  first tries the classic renderers, then falls back to timestamp-pill
+  detection, and scrolls virtualized segment lists to load long transcripts.
+  It also scrapes directly when the panel is already open.
+
 ## [1.2.0] - 2026-09-18
 
 ### Added

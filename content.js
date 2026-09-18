@@ -166,43 +166,26 @@
   // the panel itself works. The description is expanded and collapsed
   // again afterwards (best effort).
   async function fetchTranscriptViaPanel() {
-    let showBtn = findShowTranscriptButton();
-    if (!showBtn) {
-      const more = findExpandDescriptionButton();
-      if (more) {
-        try { more.scrollIntoView({ block: 'center' }); } catch { /* noop */ }
-        more.click();
-        await sleep(1500);
+    // Fast path: the panel is already open (e.g. opened manually) — scrape it.
+    let cues = extractPanelCues();
+    if (!cues.length) {
+      let showBtn = findShowTranscriptButton();
+      if (!showBtn) {
+        const more = findExpandDescriptionButton();
+        if (more) {
+          try { more.scrollIntoView({ block: 'center' }); } catch { /* noop */ }
+          more.click();
+          await sleep(1500);
+        }
+        showBtn = findShowTranscriptButton();
       }
-      showBtn = findShowTranscriptButton();
+      if (!showBtn) throw new Error('No transcript panel found for this video.');
+      try { showBtn.scrollIntoView({ block: 'center' }); } catch { /* noop */ }
+      showBtn.click();
+      cues = await waitFor(extractPanelCues, 20000);
+      if (!cues.length) throw new Error('The transcript panel did not load.');
     }
-    if (!showBtn) throw new Error('No transcript panel found for this video.');
-    try { showBtn.scrollIntoView({ block: 'center' }); } catch { /* noop */ }
-    showBtn.click();
-    const segments = await waitFor(
-      () =>
-        Array.from(document.querySelectorAll('ytd-transcript-segment-renderer')).filter(
-          (el) => el.getBoundingClientRect().height > 0
-        ),
-      15000
-    );
-    if (!segments.length) throw new Error('The transcript panel did not load.');
-    const cues = [];
-    for (const el of segments) {
-      const tsEl = el.querySelector('.segment-timestamp');
-      const start = parseTsText(tsEl ? tsEl.textContent : '');
-      if (start == null) continue;
-      const clone = el.cloneNode(true);
-      const cTs = clone.querySelector('.segment-timestamp');
-      if (cTs) cTs.remove();
-      const text = (clone.textContent || '').replace(/\s+/g, ' ').trim();
-      if (!text) continue;
-      cues.push({ start, dur: 0, text });
-    }
-    for (let i = 0; i < cues.length; i++) {
-      cues[i].dur =
-        i + 1 < cues.length ? Math.max(0, cues[i + 1].start - cues[i].start) : 3;
-    }
+    cues = await loadAllPanelCues(cues);
     try {
       closeTranscriptPanel();
     } catch { /* best effort */ }
@@ -210,10 +193,173 @@
     return cues;
   }
 
+  function extractPanelCues() {
+    const panel = findTranscriptPanel();
+    return panel ? extractCuesFromPanel(panel) : [];
+  }
+
+  function findTranscriptPanel() {
+    const byTarget = document.querySelector(
+      'ytd-engagement-panel-section-list-renderer[target-id*="transcript" i]'
+    );
+    if (byTarget) return byTarget;
+    // Fallback: locate via the "Search transcript" input, then walk up to
+    // the smallest ancestor holding several timestamp pills.
+    const input = Array.from(document.querySelectorAll('input')).find((i) =>
+      /transcript/i.test(i.getAttribute('placeholder') || '')
+    );
+    if (!input) return null;
+    let el = input.parentElement;
+    let fallback = null;
+    for (let d = 0; d < 12 && el && el !== document.body; d++) {
+      if (countTimestampPills(el) >= 2) return el;
+      if (!fallback && /panel/i.test(el.tagName || '')) fallback = el;
+      el = el.parentElement;
+    }
+    return fallback;
+  }
+
+  const TS_RE = /^\d{1,3}:\d{2}(?::\d{2})?$/;
+
+  function countTimestampPills(root) {
+    let n = 0;
+    const els = root.querySelectorAll('*');
+    for (const el of els) {
+      if (el.children.length > 1) continue;
+      if (TS_RE.test((el.textContent || '').trim())) n++;
+      if (n >= 2) return n;
+    }
+    return n;
+  }
+
+  function extractCuesFromPanel(panel) {
+    // Strategy 1: classic segment renderers.
+    const renderers = Array.from(panel.querySelectorAll('ytd-transcript-segment-renderer'));
+    if (renderers.length) {
+      const cues = [];
+      for (const el of renderers) {
+        const tsEl = el.querySelector('.segment-timestamp');
+        const start = parseTsText(tsEl ? tsEl.textContent : '');
+        if (start == null) continue;
+        const clone = el.cloneNode(true);
+        const cTs = clone.querySelector('.segment-timestamp');
+        if (cTs) cTs.remove();
+        const text = (clone.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!text) continue;
+        cues.push({ start, dur: 0, text });
+      }
+      if (cues.length) return finalizeCues(cues);
+    }
+    // Strategy 2: timestamp pills (redesigned "In this video" panel).
+    return cuesFromTimestampPills(panel);
+  }
+
+  function cuesFromTimestampPills(panel) {
+    const els = Array.from(panel.querySelectorAll('*'));
+    const cues = [];
+    const seen = new Set();
+    for (const el of els) {
+      if (el.children.length > 1) continue; // want leaf-ish nodes only
+      const t = (el.textContent || '').trim();
+      if (!TS_RE.test(t)) continue;
+      const start = parseTsText(t);
+      if (start == null) continue;
+      // Walk up to the segment container: the nearest ancestor whose text
+      // is substantially longer than the timestamp itself.
+      let node = el.parentElement;
+      let container = null;
+      while (node && node !== panel && node !== document.body) {
+        const txt = (node.textContent || '').replace(/\s+/g, ' ').trim();
+        if (txt.length > t.length + 15) {
+          container = node;
+          break;
+        }
+        node = node.parentElement;
+      }
+      if (!container || seen.has(container)) continue;
+      seen.add(container);
+      const clone = container.cloneNode(true);
+      const pillInClone = Array.from(clone.querySelectorAll('*')).find(
+        (n) => n.children.length <= 1 && (n.textContent || '').trim() === t
+      );
+      if (pillInClone) pillInClone.remove();
+      const text = (clone.textContent || '')
+        .replace(/\s+/g, ' ')
+        .replace(TS_RE, '')
+        .trim();
+      if (!text) continue;
+      cues.push({ start, dur: 0, text });
+    }
+    return finalizeCues(cues);
+  }
+
+  function finalizeCues(cues) {
+    cues.sort((a, b) => a.start - b.start);
+    const out = [];
+    for (const c of cues) {
+      const last = out[out.length - 1];
+      if (last && Math.abs(last.start - c.start) < 0.001) {
+        if (c.text.length > last.text.length) out[out.length - 1] = c;
+      } else {
+        out.push(c);
+      }
+    }
+    for (let i = 0; i < out.length; i++) {
+      out[i].dur = i + 1 < out.length ? Math.max(0, out[i + 1].start - out[i].start) : 3;
+    }
+    return out;
+  }
+
+  // The segment list can be virtualized; scroll it to load the rest.
+  async function loadAllPanelCues(initial) {
+    let cues = initial;
+    const panel = findTranscriptPanel();
+    if (!panel) return cues;
+    const scroller = findPanelScroller(panel);
+    if (!scroller) return cues;
+    let stable = 0;
+    for (let i = 0; i < 8 && stable < 2; i++) {
+      scroller.scrollTop = scroller.scrollHeight;
+      await sleep(600);
+      const now = extractCuesFromPanel(findTranscriptPanel() || panel);
+      if (now.length > cues.length) {
+        cues = now;
+        stable = 0;
+      } else {
+        stable++;
+      }
+    }
+    try {
+      scroller.scrollTop = 0;
+    } catch { /* noop */ }
+    return cues;
+  }
+
+  function findPanelScroller(panel) {
+    const candidates = Array.from(panel.querySelectorAll('*')).filter((el) => {
+      try {
+        return el.scrollHeight > el.clientHeight + 50 && el.clientHeight > 100;
+      } catch {
+        return false;
+      }
+    });
+    candidates.sort((a, b) => a.clientHeight - b.clientHeight);
+    return candidates[0] || null;
+  }
+
   function findShowTranscriptButton() {
-    const btns = Array.from(document.querySelectorAll('button'));
+    const els = Array.from(
+      document.querySelectorAll('button, a, tp-yt-paper-button, ytd-button-renderer')
+    );
     const isMatch = (b) => (b.textContent || '').trim().toLowerCase() === 'show transcript';
-    return btns.find((b) => isMatch(b) && b.offsetParent !== null) || btns.find(isMatch) || null;
+    const visible = els.filter((b) => isMatch(b) && b.offsetParent !== null);
+    const el = visible[0] || els.find(isMatch) || null;
+    // Custom elements wrap a real button — click that instead.
+    if (el && /-/.test(el.tagName || '') && !/^button$/i.test(el.tagName)) {
+      const inner = el.querySelector('button, a');
+      if (inner) return inner;
+    }
+    return el;
   }
 
   function findExpandDescriptionButton() {
@@ -222,14 +368,14 @@
     if (byId) return byId;
     return (
       Array.from(document.querySelectorAll('tp-yt-paper-button, button')).find((b) =>
-        /^\s*(\.\.\.|\u2026)?\s*more\s*$/i.test(b.textContent || '')
+        /^\s*(\.\.\.|…)?\s*more\s*$/i.test(b.textContent || '')
       ) || null
     );
   }
 
   function closeTranscriptPanel() {
     const closeBtn = document.querySelector(
-      '[aria-label="Close transcript"], ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-searchable-transcript"] [aria-label="Close"]'
+      '[aria-label="Close transcript"], ytd-engagement-panel-section-list-renderer[target-id*="transcript" i] [aria-label="Close"]'
     );
     if (closeBtn) closeBtn.click();
     const less = Array.from(document.querySelectorAll('tp-yt-paper-button, button')).find(
