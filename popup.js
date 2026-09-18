@@ -30,10 +30,10 @@ async function getCaptions(tid) {
   }
 }
 
-async function getTranscriptXml(tid, baseUrl) {
+async function getTranscript(tid, baseUrl) {
   const res = await chrome.tabs.sendMessage(tid, { type: 'GET_TRANSCRIPT', baseUrl });
   if (!res || !res.ok) throw new Error((res && res.error) || 'Transcript download failed.');
-  return res.xml;
+  return res;
 }
 
 function showError(msg) {
@@ -131,8 +131,10 @@ function downloadFile(filename, text, mime) {
 
 async function buildTranscript() {
   const track = tracks[Number($('lang').value)];
-  const xml = await getTranscriptXml(tabId, track.baseUrl);
-  const cues = parseTranscript(xml);
+  const res = await getTranscript(tabId, track.baseUrl);
+  // Content script returns ready-made cues when it used YouTube's transcript
+  // API fallback; otherwise raw XML for the classic parser.
+  const cues = res.cues && res.cues.length ? res.cues : parseTranscript(res.xml || '');
   if (!cues.length) throw new Error('Transcript came back empty.');
   let text, ext, mime;
   if (format === 'srt') { text = toSRT(cues); ext = 'srt'; mime = 'text/srt'; }
