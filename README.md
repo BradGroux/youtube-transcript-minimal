@@ -6,6 +6,10 @@ No popups, no ads, no accounts, no third-party servers, no clutter.
 Pick a language, pick a format (**TXT**, **Markdown**, **SRT**, or **VTT**),
 hit download — or copy the transcript straight to your clipboard.
 
+Built to feed transcripts to agents like Codex and Muse fast: Markdown with
+timestamps is the default, so a video's full content drops straight into an
+agent's context in one click.
+
 ![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)
 ![Manifest V3](https://img.shields.io/badge/Manifest-V3-purple.svg)
 ![Chrome](https://img.shields.io/badge/Chrome-88%2B-purple.svg)
