@@ -6,19 +6,28 @@ the same conventions apply to you.
 ## What this is
 
 A minimalist Chrome extension (Manifest V3) that downloads YouTube captions.
-No build step, no dependencies, no bundler, no backend. Four files do the
-work: `content.js`, `popup.js`, `popup.html`, `popup.css`.
+No build step, no dependencies, no bundler, no backend. The work is split
+across `content.js` (page scraping), `popup.js` / `popup.html` / `popup.css`
+(the popup UI, which also hosts the format/timestamp preferences),
+`background.js` (self-update version check), and `scripts/` (the macOS
+LaunchAgent that keeps a git-clone install fresh).
 
 ## Non-negotiables
 
-- **Minimalism is the feature.** Reject feature requests that need settings
-  pages, options UIs, or onboarding. One click, transcript out.
+- **Minimalism is the feature.** No separate settings pages, options UIs,
+  or onboarding. The popup's format buttons and timestamp toggle are the
+  entire settings surface; choices persist via `chrome.storage.local`.
 - **Private by design.** No analytics, no accounts, no third-party servers.
   All traffic stays between the user's browser and `*.youtube.com`, using the
-  user's normal session. Never add a network call to any other host.
-- **Minimal permissions.** `activeTab`, `scripting`, and host access to
-  `*.youtube.com` only. Any PR touching `manifest.json` permissions needs an
-  explicit justification.
+  user's normal session — plus one exception: the self-updater fetches this
+  repo's public `manifest.json` from `raw.githubusercontent.com` to check
+  for new versions. That request carries no user data, cookies, or
+  identifiers. Never add any other cross-host call.
+- **Minimal permissions.** `activeTab`, `scripting`, `alarms` (self-update
+  checks), `storage` (format/timestamp preferences only), host access to
+  `*.youtube.com`, and `https://raw.githubusercontent.com/*` (version check
+  only). Any PR touching `manifest.json` permissions needs an explicit
+  justification.
 - **No secrets in the repo.** The `INNERTUBE_API_KEY` used by the transcript
   fallback is YouTube's public web-client key, extracted at runtime from the
   page — it must never be hardcoded. Continuation tokens and visitor data are

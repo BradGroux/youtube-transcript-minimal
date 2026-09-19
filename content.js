@@ -230,12 +230,23 @@
   }
 
   // Text content including text inside open shadow roots, in DOM order.
+  // Skips YouTube's visually-hidden (zero-area) spans that spell the
+  // timestamp out for screen readers ("0 seconds", "1 minute, 5 seconds") —
+  // they must not leak into the downloaded transcript. The hidden check
+  // keeps this precise: real transcript text that merely starts with a
+  // duration ("5 seconds later…") lives in a visible element and is kept.
+  const SR_DURATION_RE = /^(\d+\s+hours?,?\s*)?(\d+\s+minutes?,?\s*)?\d+(\.\d+)?\s+seconds?$/i;
+
   function deepText(root) {
     let s = '';
     for (const el of deepElements(root)) {
       const nodes = el.childNodes;
       for (let i = 0; i < nodes.length; i++) {
-        if (nodes[i].nodeType === 3) s += nodes[i].textContent + ' ';
+        if (nodes[i].nodeType !== 3) continue;
+        const t = nodes[i].textContent;
+        if (!t || !t.trim()) continue;
+        if (SR_DURATION_RE.test(t.trim()) && !isVisibleish(el)) continue;
+        s += t + ' ';
       }
     }
     return s.replace(/\s+/g, ' ').trim();

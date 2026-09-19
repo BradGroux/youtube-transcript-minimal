@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-09-18
+
+### Fixed
+
+- Panel-scraped transcripts no longer include YouTube's visually-hidden
+  screen-reader timestamp descriptions ("0 seconds", "1 minute, 5 seconds").
+  They are now filtered out of the scraped text; real transcript text that
+  merely starts with a duration phrase is unaffected.
+
 ## [1.4.0] - 2026-09-18
 
 ### Fixed
