@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-09-18
+
+### Fixed
+
+- The panel fallback no longer mistakes the *"In this video"* panel's
+  **Chapters** tab for a transcript: it now clicks the panel's Transcript tab
+  before scraping, and skips candidates that only hold a chapter list (no
+  transcript UI affordance). Residual chapter rows are further cleaned by
+  collapsing repeated visible + screen-reader title copies and stripping a
+  trailing copy of the cue's own timestamp.
+- The screen-reader duration filter now also catches 1px `clip-path`-clipped
+  spans (not just zero-area rects), so hidden "0 seconds"-style descriptions
+  can't leak through either way YouTube hides them.
+
 ## [1.4.1] - 2026-09-18
 
 ### Fixed

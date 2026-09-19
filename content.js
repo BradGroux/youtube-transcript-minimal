@@ -176,6 +176,9 @@
   // cues wins — an empty classic panel can never shadow a content-bearing
   // one. Traversal pierces open shadow roots, which YouTube uses heavily.
   async function fetchTranscriptViaPanel() {
+    // One-time: switch any "In this video"-style panel from its Chapters tab
+    // to its Transcript tab, so we scrape segments instead of chapter titles.
+    await activateTranscriptTabs();
     // Fast path: a panel is already open (e.g. opened manually) — scrape it.
     let found = extractPanelCuesFromBest();
     if (!found.cues.length) {
@@ -245,7 +248,7 @@
         if (nodes[i].nodeType !== 3) continue;
         const t = nodes[i].textContent;
         if (!t || !t.trim()) continue;
-        if (SR_DURATION_RE.test(t.trim()) && !isVisibleish(el)) continue;
+        if (SR_DURATION_RE.test(t.trim()) && isEffectivelyHidden(el)) continue;
         s += t + ' ';
       }
     }
@@ -267,6 +270,27 @@
     try {
       const r = el.getBoundingClientRect();
       return r.width > 0 && r.height > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  // Stronger check for the screen-reader filter: zero-area rect, display:none,
+  // visibility:hidden, or the classic sr-only 1px box clipped to nothing.
+  function isEffectivelyHidden(el) {
+    try {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return true;
+      const cs = getComputedStyle(el);
+      if (
+        cs.display === 'none' ||
+        cs.visibility === 'hidden' ||
+        cs.visibility === 'collapse'
+      )
+        return true;
+      if (cs.clipPath && cs.clipPath !== 'none') return true;
+      if (/rect\(\s*0/.test(cs.clip || '')) return true;
+      return false;
     } catch {
       return false;
     }
@@ -315,11 +339,76 @@
     return candidates;
   }
 
+  // Click the Transcript tab in panels that have a Chapters/Transcript tab
+  // strip (e.g. the "In this video" panel), so the segment list renders.
+  // Without this we'd scrape chapter titles instead of transcript segments.
+  async function activateTranscriptTabs() {
+    for (const panel of findTranscriptPanels()) {
+      const tab = findTranscriptTab(panel);
+      if (!tab || isTabSelected(tab)) continue;
+      try {
+        tab.click();
+      } catch {
+        /* noop */
+      }
+      await sleep(1500);
+    }
+  }
+
+  function findTranscriptTab(panel) {
+    const els = deepElements(panel);
+    const byText = els.filter(
+      (el) => (el.textContent || '').trim().toLowerCase() === 'transcript'
+    );
+    const tabLike = byText.find((el) => {
+      const tag = (el.tagName || '').toUpperCase();
+      const role =
+        typeof el.getAttribute === 'function' ? el.getAttribute('role') || '' : '';
+      return role === 'tab' || /TAB/.test(tag);
+    });
+    if (tabLike) return tabLike;
+    return (
+      byText.find((el) => (el.tagName || '').toUpperCase() === 'BUTTON') || null
+    );
+  }
+
+  function isTabSelected(tab) {
+    try {
+      if (tab.getAttribute('aria-selected') === 'true') return true;
+      if (typeof tab.hasAttribute === 'function' && tab.hasAttribute('aria-current'))
+        return true;
+      const cls = typeof tab.className === 'string' ? tab.className : '';
+      if (/\b(active|selected|current)\b/i.test(cls)) return true;
+    } catch {
+      /* noop */
+    }
+    return false;
+  }
+
+  // True when the panel shows actual transcript UI — not just a chapter list.
+  function panelHasTranscriptAffordance(panel) {
+    for (const el of deepElements(panel)) {
+      const tag = (el.tagName || '').toUpperCase();
+      if (tag === 'YTD-TRANSCRIPT-SEGMENT-RENDERER') return true;
+      if (
+        tag === 'INPUT' &&
+        /transcript/i.test(
+          (typeof el.getAttribute === 'function' && el.getAttribute('placeholder')) || ''
+        )
+      )
+        return true;
+    }
+    return false;
+  }
+
   // The best candidate panel and its cues (first candidate that yields any).
+  // Candidates that only hold a chapter list are skipped.
   function extractPanelCuesFromBest() {
     for (const panel of findTranscriptPanels()) {
       const cues = extractCuesFromPanel(panel);
-      if (cues.length) return { panel, cues };
+      if (!cues.length) continue;
+      if (!panelHasTranscriptAffordance(panel)) continue;
+      return { panel, cues };
     }
     return { panel: null, cues: [] };
   }
@@ -395,6 +484,12 @@
       const idx = text.indexOf(t);
       if (idx >= 0) text = text.slice(0, idx) + ' ' + text.slice(idx + t.length);
       text = text.replace(/\s+/g, ' ').trim();
+      // Collapse runs of 2+ consecutive identical phrases ("A A A" -> "A").
+      // These come from visible + screen-reader copies of the same string;
+      // the 10-char floor keeps real speech stutters ("the the") intact.
+      text = text.replace(/(.{10,}?)\s+(?:\1\s*)+/g, '$1').trim();
+      // Strip a trailing copy of this cue's own pill timestamp.
+      if (text.endsWith(t)) text = text.slice(0, -t.length).trim();
       if (!text || TS_RE.test(text)) continue;
       cues.push({ start, dur: 0, text });
     }
