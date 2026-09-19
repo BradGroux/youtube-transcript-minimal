@@ -160,9 +160,24 @@
     return cues;
   }
 
-  // Last-resort path: drive YouTube's own "Show transcript" UI and scrape
-  // the rendered panel. This rides YouTube's real request path — including
-  // whatever attestation its player code attaches — so it works whenever
+  // youtube.com/shorts/<id> uses a different player UI from /watch.
+  // Caption discovery (the page's own player response) and the timedtext +
+  // transcript-API paths never touch page DOM, so they work the same on
+  // Shorts. Only the panel fallback depends on page DOM — and the Shorts
+  // player doesn't expose the "Show transcript" entry point that fallback
+  // drives. Callers use this to fail with a clear message instead of
+  // hunting for buttons that aren't there.
+  function isShortsPage() {
+    try {
+      return (
+        /(^|\.)youtube\.com$/.test(location.hostname) &&
+        location.pathname.startsWith('/shorts/')
+      );
+    } catch {
+      return false;
+    }
+  }
+
   // Last-resort path: drive YouTube's own "Show transcript" UI and scrape
   // the rendered panel. This rides YouTube's real request path — including
   // whatever attestation its player code attaches — so it works whenever
@@ -192,7 +207,16 @@
         }
         showBtn = findShowTranscriptButton();
       }
-      if (!showBtn) throw new Error('No transcript panel found for this video.');
+      if (!showBtn) {
+        // On Shorts the transcript panel genuinely doesn't exist — say so
+        // plainly instead of the generic "not found" (paths 1-2 already
+        // came back empty by the time this fallback runs).
+        throw new Error(
+          isShortsPage()
+            ? 'No transcript panel on Shorts: YouTube\u2019s Shorts player doesn\u2019t offer "Show transcript", and the direct caption download came back empty. This Short has no downloadable captions.'
+            : 'No transcript panel found for this video.'
+        );
+      }
       try { showBtn.scrollIntoView({ block: 'center' }); } catch { /* noop */ }
       showBtn.click();
       const deadline = Date.now() + 20000;
@@ -777,6 +801,7 @@
       extractCuesFromPanel,
       extractPanelCuesFromBest,
       cueFromModernSegment,
+      isShortsPage,
     };
   }
 })();

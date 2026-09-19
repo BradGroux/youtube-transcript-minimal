@@ -29,11 +29,13 @@ copy. That's the whole UI:
 - **Four formats** — TXT, Markdown, SRT, and VTT. SRT/VTT always carry timing;
   TXT/Markdown have an optional timestamps toggle.
 - **Language picker** — lists every caption track YouTube serves for the video,
-  preferring manual captions over auto-generated ones when both exist.
+  preferring manual captions over auto-generated ones when both exist. Your
+  pick becomes your preferred language: it sticks across videos, defaulting
+  to your browser's language when you've never picked one.
 - **Copy to clipboard** — paste the transcript anywhere without saving a file.
-- **Remembers your preferences** — your chosen format and timestamp toggle are
-  saved on your device (Markdown + timestamps by default). Change them any
-  time in the popup; your choice sticks.
+- **Remembers your preferences** — your chosen format, timestamp toggle, and
+  preferred language are saved on your device (Markdown + timestamps by
+  default). Change them any time in the popup; your choice sticks.
 - **Smart fallback** — on videos where YouTube blocks the classic caption
   endpoint (common with auto-generated captions), the extension automatically
   retries through the same transcript API YouTube's own *"Show transcript"*
@@ -140,7 +142,7 @@ Deep dive: [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).
 | `activeTab` | Read the current tab's URL/title when you click the icon. |
 | `scripting` | Inject the content script if the extension was installed mid-session. |
 | `alarms` | Wake the self-updater to check for a new published version (browser startup + every 30 minutes). |
-| `storage` | Remember your format and timestamp preferences on your device. Nothing else is stored. |
+| `storage` | Remember your format, timestamp, and language preferences on your device. Nothing else is stored. |
 | Host `*://*.youtube.com/*` | Read the video page's player data and fetch captions (same-origin). |
 | Host `https://raw.githubusercontent.com/*` | Fetch this repo's public `manifest.json` for the version check behind automatic updates. No user data is sent. |
 
@@ -157,7 +159,10 @@ minimal.
 **Does it work on Shorts / embeds / age-restricted videos?**
 Watch pages, Shorts, and embeds are supported. Age-restricted videos work if
 you're signed in to an account that can play them — the extension uses your
-normal YouTube session.
+normal YouTube session. One Shorts caveat: YouTube's Shorts player doesn't
+offer the *"Show transcript"* panel, so on Shorts the last-resort panel
+fallback can't run — the direct caption download (which is layout-independent)
+is what carries Shorts, and it works whenever the Short has captions.
 
 **A video has captions on YouTube but the extension says none are available.**
 Some videos gate caption *downloads* while still showing captions in the

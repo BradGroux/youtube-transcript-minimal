@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.4] - 2026-09-18
+
+### Added
+
+- **Preferred language**: the language picker now remembers your choice across
+  videos via `chrome.storage.local`. With no saved choice, the picker
+  defaults to your browser's language (manual captions still preferred over
+  auto-generated), then falls back to any manual track, then the video
+  default. The preference drives track selection for the primary caption
+  download; YouTube's own transcript surfaces (API + panel fallbacks) serve
+  the video's default language, which YouTube doesn't let third parties
+  override.
+- `tests/language-preference.test.js`: dependency-free Node tests for the
+  track-selection order (saved preference → browser locale → manual →
+  default), including loose `en`/`en-US` code matching.
+
+### Fixed
+
+- Shorts edge cases: the panel fallback now detects `/shorts/` pages and
+  fails with a clear message instead of hunting for a "Show transcript"
+  entry point the Shorts player doesn't offer. Caption discovery and the
+  timedtext/transcript-API paths never touch page DOM, so they work
+  unchanged on Shorts whenever the Short has captions.
+
 ## [1.4.3] - 2026-09-18
 
 ### Fixed

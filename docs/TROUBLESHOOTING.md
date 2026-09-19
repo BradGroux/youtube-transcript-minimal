@@ -37,6 +37,14 @@ auto-generated captions that YouTube gates. What to try:
 If YouTube's panel works but the extension consistently fails on the same
 video, [open an issue](../../issues) with the video URL.
 
+## "No transcript panel on Shorts…"
+
+YouTube's Shorts player doesn't offer the *"Show transcript"* panel, so the
+last-resort panel fallback can't run there. The direct caption download
+(timedtext + transcript API) is layout-independent and works on Shorts
+whenever the Short has captions — if you see this message, those paths
+already came back empty, so the Short has no downloadable captions.
+
 ## The page visibly expands the description during a download
 
 That's the last-resort fallback: YouTube rejected both invisible download

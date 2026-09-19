@@ -381,5 +381,34 @@ test('parseTsText + finalizeCues basics', () => {
   eq(cues[0].dur, 5, 'dur from next start');
 });
 
+test('isShortsPage: detects /shorts/ URLs', () => {
+  const real = globalThis.location;
+  try {
+    globalThis.location = { hostname: 'www.youtube.com', pathname: '/shorts/abc123DEF45' };
+    eq(ct.isShortsPage(), true, 'shorts url');
+    globalThis.location = { hostname: 'm.youtube.com', pathname: '/shorts/abc123DEF45' };
+    eq(ct.isShortsPage(), true, 'shorts subdomain');
+    globalThis.location = { hostname: 'www.youtube.com', pathname: '/watch' };
+    eq(ct.isShortsPage(), false, 'watch url');
+    globalThis.location = { hostname: 'www.youtube.com', pathname: '/embed/abc123DEF45' };
+    eq(ct.isShortsPage(), false, 'embed url');
+    globalThis.location = { hostname: 'www.notyoutube.com', pathname: '/shorts/abc123DEF45' };
+    eq(ct.isShortsPage(), false, 'wrong host');
+  } finally {
+    if (real === undefined) delete globalThis.location;
+    else globalThis.location = real;
+  }
+});
+
+test('isShortsPage: false with no location (Node)', () => {
+  const real = globalThis.location;
+  try {
+    delete globalThis.location;
+    eq(ct.isShortsPage(), false, 'no location');
+  } finally {
+    if (real !== undefined) globalThis.location = real;
+  }
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -10,10 +10,15 @@ let tabId = null;
 
 // Preferences: remembered across popup opens via chrome.storage.local.
 // Defaults are Markdown with timestamps — change them in the popup and
-// your choice sticks.
+// your choice sticks. The language picker works the same way: pick a
+// language once and it becomes your preferred language for every video.
 const PREFS_KEY = 'minimal-transcript-prefs';
-const DEFAULT_PREFS = { format: 'md', timestamps: true };
+const DEFAULT_PREFS = { format: 'md', timestamps: true, lang: null };
 const FORMATS = ['txt', 'md', 'srt', 'vtt'];
+
+function validLang(v) {
+  return typeof v === 'string' && v.trim() ? v.trim() : null;
+}
 
 async function loadPrefs() {
   try {
@@ -22,16 +27,30 @@ async function loadPrefs() {
     return {
       format: FORMATS.includes(p.format) ? p.format : DEFAULT_PREFS.format,
       timestamps: typeof p.timestamps === 'boolean' ? p.timestamps : DEFAULT_PREFS.timestamps,
+      lang: validLang(p.lang),
     };
   } catch {
     return { ...DEFAULT_PREFS };
   }
 }
 
+function selectedTrackLang() {
+  try {
+    const t = tracks[Number($('lang').value)];
+    return (t && t.lang) || null;
+  } catch {
+    return null;
+  }
+}
+
 function savePrefs() {
   try {
     chrome.storage.local.set({
-      [PREFS_KEY]: { format, timestamps: $('timestamps').checked },
+      [PREFS_KEY]: {
+        format,
+        timestamps: $('timestamps').checked,
+        lang: selectedTrackLang(),
+      },
     });
   } catch {
     // Storage unavailable — preferences just won't persist this session.
@@ -85,7 +104,33 @@ function trackLabel(t) {
   return t.kind === 'asr' ? `${t.name} (auto-generated)` : t.name;
 }
 
-function fillLanguages() {
+// Which track index to pre-select. Pure function (no DOM), so the Node
+// test harness can cover it. Preference order:
+//   1. the user's saved preferred language (manual track first, then auto)
+//   2. the browser's locale language (manual track first, then auto)
+//   3. any manual (non-auto-generated) track
+//   4. the video's default (first) track
+// Language codes match loosely: 'en' satisfies 'en-US' and vice versa.
+function pickTrackIndex(trackList, prefLang) {
+  const norm = (s) => String(s || '').toLowerCase();
+  const matches = (trackLang, want) => {
+    const t = norm(trackLang), w = norm(want);
+    return t.startsWith(w) || w.startsWith(t);
+  };
+  const wants = [];
+  if (validLang(prefLang)) wants.push(prefLang);
+  const nav = norm((typeof navigator !== 'undefined' && navigator.language) || '').split('-')[0];
+  if (nav && !wants.some((w) => matches(w, nav))) wants.push(nav);
+  for (const want of wants) {
+    let i = trackList.findIndex((t) => t.kind !== 'asr' && matches(t.lang, want));
+    if (i < 0) i = trackList.findIndex((t) => matches(t.lang, want));
+    if (i >= 0) return i;
+  }
+  const manual = trackList.findIndex((t) => t.kind !== 'asr');
+  return manual >= 0 ? manual : 0;
+}
+
+function fillLanguages(prefLang) {
   const sel = $('lang');
   sel.innerHTML = '';
   tracks.forEach((t, i) => {
@@ -94,11 +139,7 @@ function fillLanguages() {
     opt.textContent = trackLabel(t);
     sel.appendChild(opt);
   });
-  // Prefer a manual (non-auto) track, English first, else the first track.
-  let pick = tracks.findIndex((t) => t.kind !== 'asr' && t.lang.startsWith('en'));
-  if (pick < 0) pick = tracks.findIndex((t) => t.kind !== 'asr');
-  if (pick < 0) pick = 0;
-  sel.value = String(pick);
+  sel.value = String(pickTrackIndex(tracks, prefLang));
 }
 
 function parseTranscript(xml) {
@@ -197,60 +238,73 @@ async function withBusy(fn) {
   }
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
-  applyPrefs(await loadPrefs());
+if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('DOMContentLoaded', async () => {
+      const prefs = await loadPrefs();
+      applyPrefs(prefs);
 
-  // Format segmented control.
-  $('format').addEventListener('click', (e) => {
-    const b = e.target.closest('button');
-    if (!b) return;
-    format = b.dataset.fmt;
-    document.querySelectorAll('#format button').forEach((x) => x.classList.toggle('active', x === b));
-    $('ts-row').style.display = (format === 'txt' || format === 'md') ? '' : 'none';
-    savePrefs();
-  });
+    // Format segmented control.
+    $('format').addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      format = b.dataset.fmt;
+      document.querySelectorAll('#format button').forEach((x) => x.classList.toggle('active', x === b));
+      $('ts-row').style.display = (format === 'txt' || format === 'md') ? '' : 'none';
+      savePrefs();
+    });
 
-  $('timestamps').addEventListener('change', savePrefs);
+    $('timestamps').addEventListener('change', savePrefs);
 
-  $('download').addEventListener('click', () =>
-    withBusy(async () => {
-      const { text, filename, mime } = await buildTranscript();
-      downloadFile(filename, text, mime);
-    })
-  );
+    // Changing the language picker sets the preferred language for every video.
+    $('lang').addEventListener('change', savePrefs);
 
-  $('copy').addEventListener('click', () =>
-    withBusy(async () => {
-      const { text } = await buildTranscript();
-      await navigator.clipboard.writeText(text);
-    })
-  );
+    $('download').addEventListener('click', () =>
+      withBusy(async () => {
+        const { text, filename, mime } = await buildTranscript();
+        downloadFile(filename, text, mime);
+      })
+    );
 
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab || !tab.url || !extractVideoId(tab.url)) {
-    showError('Open a YouTube video, then click the extension icon.');
-    return;
-  }
-  tabId = tab.id;
-  $('video-title').textContent = 'Loading captions…';
+    $('copy').addEventListener('click', () =>
+      withBusy(async () => {
+        const { text } = await buildTranscript();
+        await navigator.clipboard.writeText(text);
+      })
+    );
 
-  try {
-    const res = await getCaptions(tabId);
-    if (!res || !res.ok) {
-      showError((res && res.error) || 'Could not read this page. Reload the video tab and try again.');
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab || !tab.url || !extractVideoId(tab.url)) {
+      showError('Open a YouTube video, then click the extension icon.');
       return;
     }
-    if (!res.tracks.length) {
-      $('video-title').textContent = res.title || '';
-      showError('This video has no captions available.');
-      return;
+    tabId = tab.id;
+    $('video-title').textContent = 'Loading captions…';
+
+    try {
+      const res = await getCaptions(tabId);
+      if (!res || !res.ok) {
+        showError((res && res.error) || 'Could not read this page. Reload the video tab and try again.');
+        return;
+      }
+      if (!res.tracks.length) {
+        $('video-title').textContent = res.title || '';
+        showError('This video has no captions available.');
+        return;
+      }
+      tracks = res.tracks;
+      videoTitle = res.title || 'transcript';
+      $('video-title').textContent = videoTitle;
+      fillLanguages(prefs.lang);
+      $('controls').classList.remove('hidden');
+    } catch {
+      showError('Could not reach the video tab. Reload the page and try again.');
     }
-    tracks = res.tracks;
-    videoTitle = res.title || 'transcript';
-    $('video-title').textContent = videoTitle;
-    fillLanguages();
-    $('controls').classList.remove('hidden');
-  } catch {
-    showError('Could not reach the video tab. Reload the page and try again.');
-  }
-});
+    });
+}
+
+// Test hook (Node only): expose the pure track-selection helpers to the
+// dependency-free test harness in tests/. Guarded so browser behavior is
+// unchanged — `module` is undefined inside the extension.
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { pickTrackIndex, validLang };
+}
