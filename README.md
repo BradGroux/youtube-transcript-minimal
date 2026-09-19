@@ -14,6 +14,15 @@ whatever you're building with. Your agents will thank you.
 ![Manifest V3](https://img.shields.io/badge/Manifest-V3-purple.svg)
 ![Chrome](https://img.shields.io/badge/Chrome-88%2B-purple.svg)
 
+## Screenshots
+
+![Minimal Transcript open on a YouTube video](docs/images/in-context.png)
+
+One click on any YouTube video: pick a language, pick a format, download or
+copy. That's the whole UI:
+
+<img src="docs/images/popup.png" width="300" alt="Close-up of the Minimal Transcript popup: language picker, TXT/MD/SRT/VTT format buttons, timestamp toggle, Download transcript and Copy to clipboard buttons">
+
 ## Features
 
 - **One-click downloads** — open any YouTube video, click the extension icon, download.
