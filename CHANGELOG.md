@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-09-18
+
+### Fixed
+
+- The panel fallback now recognizes YouTube's newest transcript markup:
+  `transcript-segment-view-model` segments (timestamp pill +
+  screen-reader label + `span[role="text"]` caption, no search input),
+  reached through the Transcript chip. v1.4.2's chapter-list guard only
+  knew the classic `ytd-transcript-segment-renderer` shape, so on videos
+  using the new markup it rejected the real transcript panel and failed
+  with "The transcript panel opened but stayed empty."
+- Screen-reader timestamp labels (`*A11yLabel`) are now excluded by class
+  in addition to the hidden-box check, so "0 seconds"-style descriptions
+  can't leak into downloads however YouTube hides the label.
+- Classic `ytd-transcript-segment-renderer` text now goes through the same
+  screen-reader filter instead of raw `textContent`.
+
+### Added
+
+- `tests/panel-extraction.test.js`: dependency-free Node regression tests
+  for the panel fallback, with fixtures modeled on real YouTube markup
+  (modern segments, chapter-list panels, classic renderers, chip tabs).
+  Run with `node tests/panel-extraction.test.js`.
+
 ## [1.4.2] - 2026-09-18
 
 ### Fixed

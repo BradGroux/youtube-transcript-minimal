@@ -248,11 +248,25 @@
         if (nodes[i].nodeType !== 3) continue;
         const t = nodes[i].textContent;
         if (!t || !t.trim()) continue;
-        if (SR_DURATION_RE.test(t.trim()) && isEffectivelyHidden(el)) continue;
+        if (SR_DURATION_RE.test(t.trim()) && (isA11yLabel(el) || isEffectivelyHidden(el)))
+          continue;
         s += t + ' ';
       }
     }
     return s.replace(/\s+/g, ' ').trim();
+  }
+
+  // YouTube tags screen-reader timestamp labels with an A11yLabel class
+  // (e.g. ytwTranscriptSegmentViewModelTimestampA11yLabel). Excluding them
+  // by class is deterministic — it doesn't depend on how (or whether)
+  // YouTube hides the label's box.
+  function isA11yLabel(el) {
+    try {
+      const cls = typeof el.className === 'string' ? el.className : '';
+      return /a11y/i.test(cls);
+    } catch {
+      return false;
+    }
   }
 
   // Parent chain that crosses shadow boundaries (element -> shadow host).
@@ -386,10 +400,21 @@
   }
 
   // True when the panel shows actual transcript UI — not just a chapter list.
+  // Accepts the classic segment renderer, the newer transcript-segment-view-model,
+  // a transcript search input, or a transcript-named panel that yielded cues
+  // (e.g. engagement-panel-searchable-transcript, PAmodern_transcript_view).
+  // Chapter panels (engagement-panel-structured-description,
+  // engagement-panel-macro-markers-description-chapters) match none of these.
   function panelHasTranscriptAffordance(panel) {
+    const targetId = (
+      (typeof panel.getAttribute === 'function' && panel.getAttribute('target-id')) ||
+      ''
+    ).toLowerCase();
+    if (targetId.includes('transcript')) return true;
     for (const el of deepElements(panel)) {
       const tag = (el.tagName || '').toUpperCase();
       if (tag === 'YTD-TRANSCRIPT-SEGMENT-RENDERER') return true;
+      if (tag === 'TRANSCRIPT-SEGMENT-VIEW-MODEL') return true;
       if (
         tag === 'INPUT' &&
         /transcript/i.test(
@@ -433,20 +458,32 @@
 
   function extractCuesFromPanel(panel) {
     const els = deepElements(panel);
-    // Strategy 1: classic segment renderers.
+    // Strategy 1: segment renderers — the classic
+    // ytd-transcript-segment-renderer and YouTube's newer
+    // transcript-segment-view-model (chip-driven transcript view: timestamp
+    // pill + screen-reader label + caption span, no search input).
     const renderers = els.filter((el) =>
-      /^ytd-transcript-segment-renderer$/i.test(el.tagName || '')
+      /^(ytd-transcript-segment-renderer|transcript-segment-view-model)$/i.test(
+        el.tagName || ''
+      )
     );
     if (renderers.length) {
       const cues = [];
       for (const el of renderers) {
+        if (/^transcript-segment-view-model$/i.test(el.tagName || '')) {
+          const cue = cueFromModernSegment(el);
+          if (cue) cues.push(cue);
+          continue;
+        }
         const tsEl = el.querySelector('.segment-timestamp');
         const start = parseTsText(tsEl ? tsEl.textContent : '');
         if (start == null) continue;
         const clone = el.cloneNode(true);
         const cTs = clone.querySelector('.segment-timestamp');
         if (cTs) cTs.remove();
-        const text = (clone.textContent || '').replace(/\s+/g, ' ').trim();
+        // deepText rather than raw textContent so screen-reader timestamp
+        // descriptions can't leak into classic-renderer transcripts either.
+        const text = deepText(clone);
         if (!text) continue;
         cues.push({ start, dur: 0, text });
       }
@@ -454,6 +491,30 @@
     }
     // Strategy 2: timestamp pills (redesigned "In this video" panel).
     return cuesFromTimestampPills(els);
+  }
+
+  // Newer YouTube transcript markup, observed in the wild 2026-09-18:
+  //
+  //   <transcript-segment-view-model>
+  //     <div aria-hidden="true" class="ytwTranscriptSegmentViewModelTimestamp">0:00</div>
+  //     <div class="ytwTranscriptSegmentViewModelTimestampA11yLabel">0 seconds</div>
+  //     <span role="text" class="ytAttributedStringHost …">caption…</span>
+  //   </transcript-segment-view-model>
+  //
+  // The caption span holds exactly the cue text; the a11y label is the
+  // screen-reader timestamp description ("0 seconds", "1 minute, 5 seconds")
+  // and is never part of the cue.
+  function cueFromModernSegment(el) {
+    const tsEl = el.querySelector('.ytwTranscriptSegmentViewModelTimestamp');
+    const start = parseTsText(tsEl ? tsEl.textContent : '');
+    if (start == null) return null;
+    const capEl =
+      el.querySelector('span[role="text"]') || el.querySelector('.ytAttributedStringHost');
+    const text = capEl
+      ? (capEl.textContent || '').replace(/\s+/g, ' ').trim()
+      : deepText(el);
+    if (!text || TS_RE.test(text)) return null;
+    return { start, dur: 0, text };
   }
 
   function cuesFromTimestampPills(els) {
@@ -695,5 +756,27 @@
       }
     }
     return null;
+  }
+
+  // Test hook (Node only): expose panel-extraction internals to the
+  // dependency-free test harness in tests/. Guarded so browser behavior is
+  // unchanged — `module` is undefined inside the extension.
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      parseTsText,
+      finalizeCues,
+      deepText,
+      deepElements,
+      isA11yLabel,
+      isEffectivelyHidden,
+      countTimestampPills,
+      findTranscriptPanels,
+      findTranscriptTab,
+      isTabSelected,
+      panelHasTranscriptAffordance,
+      extractCuesFromPanel,
+      extractPanelCuesFromBest,
+      cueFromModernSegment,
+    };
   }
 })();

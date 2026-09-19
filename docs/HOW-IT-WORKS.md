@@ -114,7 +114,19 @@ if the panel is already open it scrapes it directly without clicking
 anything. Segment durations are derived from consecutive start times. This
 rides YouTube's real request path, so it works whenever the panel itself
 works — at the cost of briefly expanding the description, which is why it's
-the last resort, not the first.
+the last resort, not the first. The panel DOM has changed more than once:
+besides the classic `ytd-transcript-segment-renderer` elements and the
+redesigned *"In this video"* panel's timestamp pills, newer YouTube renders
+a chip-driven transcript view whose segments are
+`transcript-segment-view-model` elements — each holding a timestamp pill
+(`.ytwTranscriptSegmentViewModelTimestamp`), a screen-reader timestamp label
+(`.ytwTranscriptSegmentViewModelTimestampA11yLabel`, excluded from cue text
+by class), and the caption itself in a `span[role="text"]`. There is no
+search input in that view. The scraper clicks the view's Transcript chip/tab
+when present, recognizes all three segment shapes, and only accepts a panel
+as transcript-bearing when it shows real transcript UI (a segment element, a
+transcript search input, or a transcript-named panel) — chapter-list panels
+are still rejected.
 
 ## Formatting
 
