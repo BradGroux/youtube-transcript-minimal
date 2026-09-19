@@ -100,7 +100,12 @@ YouTube.
 When YouTube answers the classic caption endpoint with an empty body (it does
 this on some videos, mostly auto-generated captions), the extension falls back
 to the `youtubei/v1/get_transcript` endpoint with the page's own transcript
-parameters — the exact request YouTube's *"Show transcript"* panel makes.
+parameters — the exact request YouTube's *"Show transcript"* panel makes. And
+when YouTube rejects even that (it increasingly wants attestation data only
+its own player code can produce), the extension plays its last card: it
+briefly drives YouTube's own *"Show transcript"* panel — expanding the
+description, clicking *Show transcript*, scraping the segments, then closing
+everything back up — so it works whenever YouTube's own panel works.
 
 Deep dive: [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).
 
