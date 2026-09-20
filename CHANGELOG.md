@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Renamed from "Minimal Transcript" to "Transcript Minimal" — popup title,
+  extension name, and README now match the minimal-family naming.
+
 ### Added
 
 - **About section**: the popup now ends with a small about footer — brought

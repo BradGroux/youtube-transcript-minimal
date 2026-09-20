@@ -1,4 +1,4 @@
-# Minimal Transcript
+# Transcript Minimal
 
 A minimalist Chrome extension that downloads YouTube captions in one click.
 No popups, no ads, no accounts, no third-party servers, no clutter.
@@ -16,12 +16,12 @@ whatever you're building with. Your agents will thank you.
 
 ## Screenshots
 
-![Minimal Transcript open on a YouTube video](docs/images/in-context.png)
+![Transcript Minimal open on a YouTube video](docs/images/in-context.png)
 
 One click on any YouTube video: pick a language, pick a format, download or
 copy. That's the whole UI:
 
-<img src="docs/images/popup.png" width="300" alt="Close-up of the Minimal Transcript popup: language picker, TXT/MD/SRT/VTT format buttons, timestamp toggle, Download transcript and Copy to clipboard buttons">
+<img src="docs/images/popup.png" width="300" alt="Close-up of the Transcript Minimal popup: language picker, TXT/MD/SRT/VTT format buttons, timestamp toggle, Download transcript and Copy to clipboard buttons">
 
 ## Features
 

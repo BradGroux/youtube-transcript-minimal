@@ -35,7 +35,7 @@
     "48": "icons/icon48.png"
   },
   "manifest_version": 3,
-  "name": "Minimal Transcript",
+  "name": "Transcript Minimal",
   "permissions": [
     "activeTab",
     "alarms",
