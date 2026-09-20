@@ -243,6 +243,14 @@ if (typeof document !== 'undefined' && document.addEventListener) {
       const prefs = await loadPrefs();
       applyPrefs(prefs);
 
+    // About links open in a new tab (in-page navigation is blocked in popups).
+    document.querySelectorAll('a[data-ext]').forEach((a) => {
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        chrome.tabs.create({ url: a.href });
+      });
+    });
+
     // Format segmented control.
     $('format').addEventListener('click', (e) => {
       const b = e.target.closest('button');

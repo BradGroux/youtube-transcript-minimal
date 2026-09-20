@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **About section**: the popup now ends with a small about footer — brought
+  to you by Brad Groux and Digital Meld, with a link to learn to build tools
+  like this in the SSTB.ai community. Links open in a new tab via
+  `chrome.tabs.create`.
+
 ## [1.4.4] - 2026-09-18
 
 ### Added

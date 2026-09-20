@@ -172,6 +172,12 @@ blocked, it tells you plainly instead of failing silently.
 **Does it upload anything anywhere?**
 No. See [docs/PRIVACY.md](docs/PRIVACY.md).
 
+## About
+
+Brought to you by [Brad Groux](https://twitter.com/bradgroux) and [Digital Meld](https://go.sstb.ai/extensions).
+
+Learn to build tools like this in the [SSTB.ai community](https://go.sstb.ai/transcript-minimal).
+
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md). Releases are cut from git tags

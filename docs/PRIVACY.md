@@ -27,6 +27,10 @@ extension touches and what it doesn't.
 - Local preferences only: the popup remembers your chosen format and
   timestamp toggle in `chrome.storage.local`. Nothing else is stored, nothing
   leaves your device.
+- The about links at the bottom of the popup (my Twitter, Digital Meld, the
+  SSTB.ai community) are plain links: the extension fetches nothing from
+  them. Clicking one just opens a normal browser tab, like any link on the
+  web.
 - No ad injection, no DOM modification of the YouTube page beyond reading it.
 
 ## Permissions, justified

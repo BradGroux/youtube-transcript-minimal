@@ -130,3 +130,21 @@ button.ghost:hover { border-color: #6d4fc2; color: #e8e8ee; }
   min-height: 16px;
   text-align: center;
 }
+
+.about {
+  border-top: 1px solid #34343f;
+  margin-top: 14px;
+  padding-top: 12px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: #8a8a98;
+}
+
+.about p + p { margin-top: 6px; }
+
+.about a {
+  color: #a58cf0;
+  text-decoration: none;
+}
+
+.about a:hover { text-decoration: underline; }
